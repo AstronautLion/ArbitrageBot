@@ -10,7 +10,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQuery
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TOKEN = 'ВАШ_ТОКЕН'  # Замените на ваш токен
+TOKEN = '7902757677:AAF23FPTlqBb_kGpV4vPFEbV5JKU_osd_-U'  # Замените на ваш токен
 
 # Глобальная переменная для хранения данных о ценах и спредах
 price_data = {}
