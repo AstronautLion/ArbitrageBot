@@ -20,14 +20,7 @@ spread_data = {}
 async def fetch_prices():
     global price_data
     exchanges = {
-        "ByBit": "https://api.bybit.com/v2/public/tickers",
-        "MEXC": "https://www.mexc.com/api/v2/market/tickers",
-        "HTX": "https://api.hbg.com/market/tickers",
-        "BitGet": "https://api.bitget.com/api/v1/market/tickers",
-        "KuCoin": "https://api.kucoin.com/api/v1/market/allTickers",
-        "BingX": "https://api.bingx.com/api/v1/market/tickers",
-        "Gate.io": "https://api.gate.io/api2/1/tickers",
-        "OKX": "https://www.okx.com/api/v5/market/tickers"
+        "CoinGecko": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,litecoin&vs_currencies=usd"
     }
 
     for exchange, url in exchanges.items():
@@ -35,41 +28,11 @@ async def fetch_prices():
             response = requests.get(url)
             if response.status_code == 200:
                 price_data[exchange] = response.json()
-                calculate_spreads()  # Вычисляем спреды после получения данных
-            elif response.status_code == 429:
-                logger.warning(f"Слишком много запросов к {exchange}. Ожидание перед следующей попыткой.")
-                time.sleep(5)  # Ожидание перед повторной попыткой
+                logger.info(f"Данные получены с {exchange}: {price_data[exchange]}")
             else:
                 logger.error(f"Ошибка при получении данных с {exchange}: {response.status_code}")
         except Exception as e:
             logger.error(f"Ошибка при запросе к {exchange}: {e}")
-
-def calculate_spreads():
-    global spread_data
-    spread_data.clear()  # Очищаем предыдущие данные о спредах
-
-    for exchange in price_data.keys():
-        try:
-            if 'result' in price_data[exchange]:
-                for ticker in price_data[exchange]['result']:
-                    if 'ask' in ticker and 'bid' in ticker:
-                        ask = float(ticker['ask'])
-                        bid = float(ticker['bid'])
-                        spread = ask - bid
-                        percent_spread = (spread / ask) * 100 if ask != 0 else 0  # Избегаем деления на ноль
-
-                        spread_data[ticker['symbol']] = {
-                            'price': ask,
-                            'exchange': exchange,
-                            'percent_spread': percent_spread,
-                            'blockchain': ticker.get('blockchain', 'Неизвестно'),  # Информация о блокчейне
-                            'withdraw_fee': ticker.get('withdraw_fee', 'Неизвестно')  # Комиссия за вывод
-                        }
-            else:
-                logger.warning(f"Нет данных 'result' на {exchange}.")
-        
-        except Exception as e:
-            logger.error(f"Ошибка при вычислении спредов для {exchange}: {e}")
 
 def run_scheduler():
     schedule.every(1).minutes.do(fetch_prices)  # Обновление каждую минуту
@@ -99,20 +62,12 @@ def get_prices(chat_id):
         updater.bot.send_message(chat_id, "Данные еще не загружены. Пожалуйста, подождите.")
         return
 
-    response_message = ""
-    for exchange, data in price_data.items():
+    response_message = "Цены на монеты:\n"
+    
+    for exchange in price_data.keys():
         response_message += f"{exchange}:\n"
-        if 'result' in data:  # Проверка наличия ключа 'result'
-            for ticker in data['result']:
-                symbol = ticker['symbol']
-                if symbol in spread_data:
-                    spread_info = spread_data[symbol]
-                    response_message += (
-                        f"{symbol}: {ticker['last_price']}, "
-                        f"Блокчейн: {spread_info['blockchain']}, "
-                        f"Комиссия за вывод: {spread_info['withdraw_fee']}, "
-                        f"Процент спреда: {spread_info['percent_spread']:.2f}%\n"
-                    )
+        for coin, data in price_data[exchange].items():
+            response_message += f"{coin.capitalize()}: ${data['usd']}\n"
     
     updater.bot.send_message(chat_id, response_message)
 
@@ -127,43 +82,21 @@ def set_interval(update: Update, context: CallbackContext) -> None:
     
     update.message.reply_text(f"Интервал обновления установлен на {interval} минут(ы).")
 
-def show_spread(update: Update, context: CallbackContext) -> None:
-    if not spread_data:
-        update.message.reply_text("Спреды еще не загружены. Пожалуйста, подождите.")
-        return
-
-    response_message = "Спреды по валютным парам:\n"
-    
-    for pair in spread_data.keys():
-        price_info = spread_data[pair]
-        response_message += (
-            f"{pair}: {price_info['price']} на {price_info['exchange']}, "
-            f"Процент спреда: {price_info['percent_spread']:.2f}%, "
-            f"Блокчейн: {price_info['blockchain']}, Комиссия за вывод: {price_info['withdraw_fee']}\n"
-        )
-
-    updater.bot.send_message(update.message.chat_id, response_message)
-
 def main() -> None:
     global updater
-    updater = Updater(TOKEN)
+    updater = Application.builder().token(TOKEN).build()
     
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("set_interval", set_interval))
     
     # Обработка нажатий кнопок
     dispatcher.add_handler(CallbackQueryHandler(button))
     
-    # Команда для показа спреда
-    dispatcher.add_handler(CommandHandler("show_spread", show_spread))
-
     # Запуск планировщика в отдельном потоке
     Thread(target=run_scheduler).start()
 
-    updater.start_polling()
-    updater.idle()
+    updater.run_polling()
 
 if __name__ == '__main__':
     fetch_prices()  # Первоначальная загрузка данных
