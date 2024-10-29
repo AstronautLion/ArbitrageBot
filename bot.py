@@ -144,6 +144,7 @@ def show_spread(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     global updater
     updater = Updater(TOKEN)
+    
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler("start", start))
