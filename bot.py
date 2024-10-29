@@ -4,20 +4,20 @@ import schedule
 import time
 from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
 
 # Настройка логирования
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TOKEN = '7494647108:AAF72N--PTZOFCaRbqKPn4v377aJ2ADIwsA'  # Замените на ваш токен
+TOKEN = 'ВАШ_ТОКЕН'  # Замените на ваш токен
 
 # Глобальная переменная для хранения данных о ценах и спредах
 price_data = {}
 spread_data = {}
 
 # Функция для получения цен с бирж
-def fetch_prices():
+async def fetch_prices():
     global price_data
     exchanges = {
         "ByBit": "https://api.bybit.com/v2/public/tickers",
@@ -36,6 +36,9 @@ def fetch_prices():
             if response.status_code == 200:
                 price_data[exchange] = response.json()
                 calculate_spreads()  # Вычисляем спреды после получения данных
+            elif response.status_code == 429:
+                logger.warning(f"Слишком много запросов к {exchange}. Ожидание перед следующей попыткой.")
+                time.sleep(5)  # Ожидание перед повторной попыткой
             else:
                 logger.error(f"Ошибка при получении данных с {exchange}: {response.status_code}")
         except Exception as e:
@@ -74,13 +77,13 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(1)
 
-def start(update: Update, context: CallbackContext) -> None:
+async def start(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [InlineKeyboardButton("Получить цены", callback_data='get_prices')],
         [InlineKeyboardButton("Установить интервал обновления", callback_data='set_interval')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text('Привет! Я бот для криптоарбитража.', reply_markup=reply_markup)
+    await update.message.reply_text('Привет! Я бот для криптоарбитража.', reply_markup=reply_markup)
 
 def button(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
